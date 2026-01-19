@@ -8,6 +8,7 @@
         :root {
             --bg-color: #020617;
             --court-orange: #f97316;
+            --miss-red: #ef4444;
             --ui-glass: rgba(255, 255, 255, 0.05);
             --ui-border: rgba(255, 255, 255, 0.1);
         }
@@ -48,53 +49,68 @@
             align-items: flex-start;
         }
 
-        .score-card {
+        .stats-container {
+            display: flex;
+            gap: 15px;
+        }
+
+        .stat-card {
             background: var(--ui-glass);
-            padding: 15px 25px;
+            padding: 12px 20px;
             border-radius: 20px;
             backdrop-filter: blur(10px);
             border: 1px solid var(--ui-border);
             color: white;
             box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            min-width: 100px;
         }
 
-        .score-label {
-            font-size: 12px;
+        .stat-label {
+            font-size: 10px;
             text-transform: uppercase;
             letter-spacing: 2px;
             opacity: 0.5;
-            margin-bottom: 4px;
+            margin-bottom: 2px;
         }
 
-        .score-value {
-            font-size: 36px;
+        .stat-value {
+            font-size: 28px;
             font-weight: 800;
-            color: var(--court-orange);
         }
 
-        #restart-btn {
+        #score-val { color: var(--court-orange); }
+        #miss-val { color: var(--miss-red); }
+
+        .actions-container {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
             pointer-events: auto;
+        }
+
+        .btn {
             background: var(--ui-glass);
             border: 1px solid var(--ui-border);
             color: white;
-            padding: 12px 24px;
-            border-radius: 16px;
+            padding: 10px 24px;
+            border-radius: 14px;
             font-weight: bold;
             cursor: pointer;
             backdrop-filter: blur(10px);
             transition: all 0.2s ease;
             text-transform: uppercase;
             letter-spacing: 1px;
-            font-size: 14px;
+            font-size: 12px;
         }
 
-        #restart-btn:hover {
-            background: rgba(249, 115, 22, 0.2);
-            border-color: var(--court-orange);
+        .btn:hover {
+            background: rgba(255, 255, 255, 0.1);
             transform: translateY(-2px);
+            border-color: var(--court-orange);
+            color: var(--court-orange);
         }
 
-        #restart-btn:active {
+        .btn:active {
             transform: translateY(0);
         }
 
@@ -127,12 +143,20 @@
     <canvas id="gameCanvas"></canvas>
     
     <div id="ui-layer">
-        <div class="score-card">
-            <div class="score-label">Current Score</div>
-            <div id="score" class="score-value">0</div>
+        <div class="stats-container">
+            <div class="stat-card">
+                <div class="stat-label">Score</div>
+                <div id="score-val" class="stat-value">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Misses</div>
+                <div id="miss-val" class="stat-value">0</div>
+            </div>
         </div>
         
-        <button id="restart-btn">Restart Game</button>
+        <div class="actions-container">
+            <button id="restart-btn" class="btn">Restart</button>
+        </div>
     </div>
 
     <div id="toast">SWISH!</div>
@@ -142,16 +166,18 @@
 <script>
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
-    const scoreEl = document.getElementById('score');
+    const scoreEl = document.getElementById('score-val');
+    const missEl = document.getElementById('miss-val');
     const toastEl = document.getElementById('toast');
     const restartBtn = document.getElementById('restart-btn');
 
     // Game Physics constants
     const GRAVITY = 0.35;
-    const BOUNCE = 0.75; // Increased bounce to prevent sticking
+    const BOUNCE = 0.75; 
     const AIR_RESISTANCE = 0.995;
 
     let score = 0;
+    let misses = 0;
     let isDragging = false;
     let dragStart = { x: 0, y: 0 };
     let dragCurrent = { x: 0, y: 0 };
@@ -165,7 +191,11 @@
         angle: 0,
         rotationSpeed: 0,
         isFlying: false,
-        reset: function() {
+        reset: function(isManualReset = false) {
+            // Automatic miss detection: if it wasn't scored and it was flying, increment misses
+            if (!isManualReset && this.isFlying && !hoop.hasScoredThisTurn) {
+                incrementMiss();
+            }
             this.x = 100;
             this.y = canvas.height - 150;
             this.vx = 0;
@@ -178,14 +208,10 @@
     };
 
     const hoop = {
-        x: 0, 
-        y: 0, 
-        width: 85,
+        x: 0, y: 0, width: 85,
         rimThickness: 10,
-        backboardX: 0,
-        backboardY: 0,
-        backboardW: 12,
-        backboardH: 140,
+        backboardX: 0, backboardY: 0,
+        backboardW: 12, backboardH: 140,
         hasScoredThisTurn: false,
         init: function() {
             this.backboardX = canvas.width - this.backboardW;
@@ -195,17 +221,24 @@
         }
     };
 
+    function incrementMiss() {
+        misses++;
+        missEl.innerText = misses;
+    }
+
     function init() {
         resize();
-        ball.reset();
+        ball.reset(true);
         
         window.addEventListener('resize', resize);
         
         restartBtn.addEventListener('click', () => {
             score = 0;
-            scoreEl.innerText = score;
-            ball.reset();
-            showToast("RESTART!");
+            misses = 0;
+            scoreEl.innerText = 0;
+            missEl.innerText = 0;
+            ball.reset(true);
+            showToast("RESTARTED");
         });
 
         canvas.addEventListener('mousedown', startDrag);
@@ -226,7 +259,7 @@
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
         hoop.init();
-        if (!ball.isFlying) ball.reset();
+        if (!ball.isFlying) ball.reset(true);
     }
 
     function startDrag(e) {
@@ -247,57 +280,36 @@
     function endDrag() {
         if (!isDragging) return;
         isDragging = false;
-
         const dx = dragCurrent.x - dragStart.x;
         const dy = dragCurrent.y - dragStart.y;
-
         ball.vx = dx * 0.14;
         ball.vy = dy * 0.14;
         ball.rotationSpeed = ball.vx * 0.05;
-        
-        if (Math.abs(ball.vx) + Math.abs(ball.vy) > 2) {
-            ball.isFlying = true;
-        }
+        if (Math.abs(ball.vx) + Math.abs(ball.vy) > 2) ball.isFlying = true;
     }
 
     function showToast(text) {
         toastEl.innerText = text;
         toastEl.style.opacity = '1';
-        toastEl.style.transform = 'translate(-50%, -50%) scale(1.2)';
+        toastEl.style.transform = 'translate(-50%, -50%) scale(1.1)';
         setTimeout(() => {
             toastEl.style.opacity = '0';
             toastEl.style.transform = 'translate(-50%, -50%) scale(1)';
-        }, 1200);
+        }, 1000);
     }
 
     function resolveRimCollision(px, py) {
         const dist = Math.hypot(ball.x - px, ball.y - py);
         if (dist < ball.radius + hoop.rimThickness / 2) {
-            // Calculate collision normal
             const nx = (ball.x - px) / dist;
             const ny = (ball.y - py) / dist;
-
-            // Dot product of velocity and normal
             const dot = ball.vx * nx + ball.vy * ny;
-
-            // Reflect velocity along normal
             if (dot < 0) {
-                const combinedSpeed = Math.hypot(ball.vx, ball.vy);
-                const bounceSpeed = Math.max(combinedSpeed * BOUNCE, 3); // Minimum bounce speed
-
-                ball.vx = (ball.vx - 2 * dot * nx) * 0.8;
-                ball.vy = (ball.vy - 2 * dot * ny) * 0.8;
-                
-                // Add a little upward/outward kick if it's too slow
-                ball.vx += nx * 2;
-                ball.vy += ny * 2;
-
-                // Push ball out to prevent multi-frame sticking
+                ball.vx = (ball.vx - 2 * dot * nx) * BOUNCE;
+                ball.vy = (ball.vy - 2 * dot * ny) * BOUNCE;
+                ball.vx += nx * 1.5; ball.vy += ny * 1.5; // Physical kick
                 ball.x = px + nx * (ball.radius + hoop.rimThickness / 2 + 2);
                 ball.y = py + ny * (ball.radius + hoop.rimThickness / 2 + 2);
-                
-                // Transfer some linear velocity to rotation
-                ball.rotationSpeed = (ball.vx + ball.vy) * 0.05;
             }
         }
     }
@@ -311,31 +323,18 @@
         ball.y += ball.vy;
         ball.angle += ball.rotationSpeed;
 
-        // 1. Backboard Collision
         if (ball.x + ball.radius > hoop.backboardX && 
-            ball.y > hoop.backboardY && 
-            ball.y < hoop.backboardY + hoop.backboardH) {
-            
+            ball.y > hoop.backboardY && ball.y < hoop.backboardY + hoop.backboardH) {
             ball.vx = -Math.abs(ball.vx) * BOUNCE;
             ball.x = hoop.backboardX - ball.radius - 2;
-            ball.rotationSpeed = ball.vy * 0.1; 
         }
 
-        // 2. Rim Collisions (Front and Back points)
-        const rimLeftX = hoop.x - hoop.width / 2;
-        const rimRightX = hoop.x + hoop.width / 2;
-        
-        resolveRimCollision(rimLeftX, hoop.y);
-        resolveRimCollision(rimRightX, hoop.y);
+        resolveRimCollision(hoop.x - hoop.width / 2, hoop.y);
+        resolveRimCollision(hoop.x + hoop.width / 2, hoop.y);
 
-        // 3. Scoring Logic
         if (!hoop.hasScoredThisTurn && ball.vy > 0) {
-            const rimLeft = hoop.x - hoop.width / 2;
-            const rimRight = hoop.x + hoop.width / 2;
-            
-            if (ball.x > rimLeft && ball.x < rimRight && 
+            if (ball.x > hoop.x - hoop.width/2 && ball.x < hoop.x + hoop.width/2 && 
                 ball.y > hoop.y - 15 && ball.y < hoop.y + 15) {
-                
                 hoop.hasScoredThisTurn = true;
                 score++;
                 scoreEl.innerText = score;
@@ -343,7 +342,6 @@
             }
         }
 
-        // 4. Reset Bounds
         if (ball.y > canvas.height + 100 || ball.x > canvas.width + 100 || ball.x < -100) {
             ball.reset();
         }
@@ -351,23 +349,17 @@
 
     function draw() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-        // Floor
         ctx.strokeStyle = "rgba(255,255,255,0.05)";
         ctx.lineWidth = 4;
         ctx.beginPath();
-        ctx.moveTo(0, canvas.height - 80);
-        ctx.lineTo(canvas.width, canvas.height - 80);
+        ctx.moveTo(0, canvas.height - 80); ctx.lineTo(canvas.width, canvas.height - 80);
         ctx.stroke();
 
         // Hoop Assembly
         ctx.fillStyle = "rgba(255, 255, 255, 0.08)";
         ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
-        ctx.lineWidth = 2;
         ctx.fillRect(hoop.backboardX, hoop.backboardY, hoop.backboardW, hoop.backboardH);
         ctx.strokeRect(hoop.backboardX, hoop.backboardY, hoop.backboardW, hoop.backboardH);
-        
-        ctx.strokeStyle = "rgba(255,255,255,0.6)";
         ctx.strokeRect(hoop.backboardX - 2, hoop.y - 45, 5, 60);
 
         // Net
@@ -376,8 +368,7 @@
         ctx.lineWidth = 1;
         const rimL = hoop.x - hoop.width/2;
         for(let i=0; i<=5; i++) {
-            const xPosStart = rimL + (i * (hoop.width/5));
-            ctx.moveTo(xPosStart, hoop.y);
+            ctx.moveTo(rimL + (i * (hoop.width/5)), hoop.y);
             ctx.lineTo(hoop.x - 15 + (i*6), hoop.y + 55);
         }
         ctx.stroke();
@@ -386,44 +377,35 @@
         ctx.beginPath();
         ctx.strokeStyle = "#ef4444";
         ctx.lineWidth = hoop.rimThickness;
-        ctx.lineCap = "round";
         ctx.moveTo(hoop.x - hoop.width/2, hoop.y);
         ctx.lineTo(hoop.x + hoop.width/2, hoop.y);
         ctx.stroke();
 
-        // Trajectory
+        // Trajectory Preview
         if (isDragging) {
             ctx.beginPath();
             ctx.strokeStyle = "rgba(255,255,255,0.15)";
             ctx.setLineDash([4, 12]);
-            let tx = ball.x;
-            let ty = ball.y;
-            let tvx = (dragCurrent.x - dragStart.x) * 0.14;
-            let tvy = (dragCurrent.y - dragStart.y) * 0.14;
+            let tx = ball.x, ty = ball.y;
+            let tvx = (dragCurrent.x - dragStart.x) * 0.14, tvy = (dragCurrent.y - dragStart.y) * 0.14;
             ctx.moveTo(tx, ty);
             for(let i=0; i<25; i++) {
-                tvy += GRAVITY;
-                tx += tvx;
-                ty += tvy;
+                tvy += GRAVITY; tx += tvx; ty += tvy;
                 ctx.lineTo(tx, ty);
             }
             ctx.stroke();
             ctx.setLineDash([]);
         }
 
-        // Ball
+        // The Ball
         ctx.save();
         ctx.translate(ball.x, ball.y);
         ctx.rotate(ball.angle);
-        const grad = ctx.createRadialGradient(-ball.radius/3, -ball.radius/3, 5, 0, 0, ball.radius);
-        grad.addColorStop(0, "#fb923c");
-        grad.addColorStop(1, "#c2410c");
-        ctx.beginPath();
-        ctx.arc(0, 0, ball.radius, 0, Math.PI * 2);
-        ctx.fillStyle = grad;
-        ctx.fill();
-        ctx.strokeStyle = "rgba(0,0,0,0.3)";
-        ctx.lineWidth = 2;
+        const grad = ctx.createRadialGradient(-5,-5, 5, 0, 0, ball.radius);
+        grad.addColorStop(0, "#fb923c"); grad.addColorStop(1, "#c2410c");
+        ctx.beginPath(); ctx.arc(0, 0, ball.radius, 0, Math.PI * 2);
+        ctx.fillStyle = grad; ctx.fill();
+        ctx.strokeStyle = "rgba(0,0,0,0.3)"; ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.moveTo(-ball.radius, 0); ctx.lineTo(ball.radius, 0);
         ctx.moveTo(0, -ball.radius); ctx.lineTo(0, ball.radius);
@@ -442,5 +424,3 @@
 </script>
 </body>
 </html>
-
-  
